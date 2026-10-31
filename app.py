@@ -62,6 +62,10 @@ class MainWindow(QMainWindow):
         self.level_bar = QProgressBar()
         self.level_bar.setRange(0, 100)
         self.level_bar.setValue(0)
+        self.level_bar.setFormat("%p%")
+        self.level_bar.setTextVisible(True)
+        self.level_bar.setMinimumHeight(22)
+        self.level_bar.setObjectName("audioLevelBar")
         layout.addWidget(self.level_bar)
 
         ollama_row = QHBoxLayout()
@@ -114,8 +118,25 @@ class MainWindow(QMainWindow):
                 border-radius: 7px; padding: 11px 15px; font-weight: 700;
             }
             QPushButton:disabled { background: #596452; color: #c0c9bc; }
-            QProgressBar { background: #1b241b; border: 0; border-radius: 5px; height: 14px; }
-            QProgressBar::chunk { background: #2ecc71; border-radius: 5px; }
+            QProgressBar#audioLevelBar {
+                background: #263126;
+                border: 1px solid #354335;
+                border-radius: 6px;
+                min-height: 20px;
+                color: #ffffff;
+                text-align: center;
+                font-weight: 700;
+            }
+            QProgressBar#audioLevelBar::chunk {
+                border-radius: 5px;
+                background: qlineargradient(
+                    x1: 0, y1: 0, x2: 1, y2: 0,
+                    stop: 0 #2ecc71,
+                    stop: 0.60 #a8e63a,
+                    stop: 0.78 #f1c40f,
+                    stop: 1 #e74c3c
+                );
+            }
         """)
 
         self.timer = QTimer(self)
@@ -159,7 +180,8 @@ class MainWindow(QMainWindow):
     def update_audio_meter(self):
         if self.monitor is None:
             return
-        self.level_bar.setValue(int(self.monitor.level() * 100))
+        level = max(0, min(100, int(self.monitor.level() * 100)))
+        self.level_bar.setValue(level)
         error = self.monitor.pop_error()
         if error:
             self.output.appendPlainText(f"Audio warning: {error}")
@@ -179,13 +201,13 @@ class MainWindow(QMainWindow):
         if not prompt:
             return
         self.ask_button.setEnabled(False)
-        self.output.appendPlainText("\nYou: " + prompt)
+        self.output.appendPlainText("\\nYou: " + prompt)
         QApplication.processEvents()
         try:
             answer = generate_reply(prompt)
-            self.output.appendPlainText("\nRivo AI: " + answer)
+            self.output.appendPlainText("\\nRivo AI: " + answer)
         except OllamaError as exc:
-            self.output.appendPlainText(f"\nOllama error: {exc}")
+            self.output.appendPlainText(f"\\nOllama error: {exc}")
         finally:
             self.ask_button.setEnabled(True)
 
