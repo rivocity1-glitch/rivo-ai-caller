@@ -201,13 +201,13 @@ class MainWindow(QMainWindow):
         if not prompt:
             return
         self.ask_button.setEnabled(False)
-        self.output.appendPlainText("\\nYou: " + prompt)
+        self.output.appendPlainText("\nYou: " + prompt)
         QApplication.processEvents()
         try:
             answer = generate_reply(prompt)
-            self.output.appendPlainText("\\nRivo AI: " + answer)
+            self.output.appendPlainText("\nRivo AI: " + answer)
         except OllamaError as exc:
-            self.output.appendPlainText(f"\\nOllama error: {exc}")
+            self.output.appendPlainText(f"\nOllama error: {exc}")
         finally:
             self.ask_button.setEnabled(True)
 
