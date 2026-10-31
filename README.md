@@ -2,15 +2,25 @@
 
 Local-first Windows desktop prototype for RivoCity vendor outreach.
 
-## Current milestone
+## Saved development checkpoint — 31 October 2026
 
-This first scaffold provides:
-- A PySide6 desktop dashboard.
+The desktop prototype launches and the local AI prompt test has been confirmed working with `qwen2.5:3b` through Ollama.
+
+Implemented and tested:
+- PySide6 desktop dashboard.
 - Microphone device discovery and live input-level testing.
-- Local Ollama connectivity and model test.
-- A configuration path designed for later speech recognition, TTS, conversation management, and acoustic SIM-call bridging.
+- Green-to-yellow-to-red microphone level progress bar.
+- Local Ollama connectivity check and prompt/response test.
+- AI generation in a background QThread so the UI does not freeze during inference.
+- Error reporting in the diagnostics panel for failed AI requests.
 
-**It does not place phone calls yet.** Calls remain manually initiated on the Android phone. The acoustic bridge will be added only after microphone/speaker testing is stable.
+**Last confirmed working state:** App opens, Ollama reports connected, and the sample RivoCity prompt returns a response in the diagnostics panel.
+
+**Not implemented yet:** speech-to-text, text-to-speech, live conversation handling, Android/SIM call integration, and phone calls. The prototype does not place calls.
+
+### Resume from here
+
+Next milestone: implement local speech-to-text first, then evaluate Marathi/Hindi/English text-to-speech and connect both to the conversation engine. Before adding the acoustic SIM-call bridge, test microphone and speaker routing independently.
 
 ## Target hardware
 
