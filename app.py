@@ -1,24 +1,34 @@
 import sys
 
-import sounddevice as sd
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QThread, Signal, QTimer
 from PySide6.QtWidgets import (
-    QApplication,
-    QComboBox,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QMessageBox,
-    QPushButton,
-    QProgressBar,
-    QPlainTextEdit,
-    QVBoxLayout,
-    QWidget,
+    QApplication, QComboBox, QHBoxLayout, QLabel, QMainWindow,
+    QMessageBox, QPushButton, QProgressBar, QPlainTextEdit,
+    QVBoxLayout, QWidget,
 )
 
 from src.rivo_ai_caller.audio_devices import MicrophoneMonitor, list_input_devices
 from src.rivo_ai_caller.config import settings
 from src.rivo_ai_caller.ollama_client import check_connection, generate_reply, OllamaError
+
+
+class OllamaWorker(QThread):
+    succeeded = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, prompt: str):
+        super().__init__()
+        self.prompt = prompt
+
+    def run(self):
+        try:
+            answer = generate_reply(self.prompt, timeout=180.0)
+            if not answer:
+                self.failed.emit("Ollama returned an empty response. Check that the model is loaded.")
+            else:
+                self.succeeded.emit(answer)
+        except Exception as exc:
+            self.failed.emit(f"{type(exc).__name__}: {exc}")
 
 
 class MainWindow(QMainWindow):
@@ -27,6 +37,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Rivo AI Caller — Local Prototype")
         self.resize(820, 620)
         self.monitor = None
+        self.ai_worker = None
 
         root = QWidget()
         layout = QVBoxLayout(root)
@@ -57,8 +68,7 @@ class MainWindow(QMainWindow):
         controls.addWidget(refresh_button)
         layout.addLayout(controls)
 
-        self.level_label = QLabel("Input level")
-        layout.addWidget(self.level_label)
+        layout.addWidget(QLabel("Input level"))
         self.level_bar = QProgressBar()
         self.level_bar.setRange(0, 100)
         self.level_bar.setValue(0)
@@ -119,22 +129,16 @@ class MainWindow(QMainWindow):
             }
             QPushButton:disabled { background: #596452; color: #c0c9bc; }
             QProgressBar#audioLevelBar {
-                background: #263126;
-                border: 1px solid #354335;
-                border-radius: 6px;
-                min-height: 20px;
-                color: #ffffff;
-                text-align: center;
-                font-weight: 700;
+                background: #263126; border: 1px solid #354335;
+                border-radius: 6px; min-height: 20px;
+                color: #ffffff; text-align: center; font-weight: 700;
             }
             QProgressBar#audioLevelBar::chunk {
                 border-radius: 5px;
                 background: qlineargradient(
                     x1: 0, y1: 0, x2: 1, y2: 0,
-                    stop: 0 #2ecc71,
-                    stop: 0.60 #a8e63a,
-                    stop: 0.78 #f1c40f,
-                    stop: 1 #e74c3c
+                    stop: 0 #2ecc71, stop: 0.60 #a8e63a,
+                    stop: 0.78 #f1c40f, stop: 1 #e74c3c
                 );
             }
         """)
@@ -152,7 +156,8 @@ class MainWindow(QMainWindow):
                 self.device_combo.addItem("No microphone input found", None)
         except Exception as exc:
             self.device_combo.addItem("Audio device error", None)
-            self.output.appendPlainText(f"Audio discovery error: {exc}")
+            if hasattr(self, "output"):
+                self.output.appendPlainText(f"Audio discovery error: {exc}")
 
     def toggle_microphone(self):
         if self.monitor is not None:
@@ -189,32 +194,48 @@ class MainWindow(QMainWindow):
     def test_ollama(self):
         self.ollama_button.setEnabled(False)
         QApplication.processEvents()
-        ok, details = check_connection()
-        self.ollama_status.setText("Ollama: connected" if ok else "Ollama: unavailable")
-        self.output.appendPlainText(
-            f"Ollama {'OK' if ok else 'ERROR'} — {details}"
-        )
-        self.ollama_button.setEnabled(True)
+        try:
+            ok, details = check_connection()
+            self.ollama_status.setText("Ollama: connected" if ok else "Ollama: unavailable")
+            self.output.appendPlainText(f"Ollama {'OK' if ok else 'ERROR'} — {details}")
+        except Exception as exc:
+            self.ollama_status.setText("Ollama: error")
+            self.output.appendPlainText(f"Ollama check failed: {type(exc).__name__}: {exc}")
+        finally:
+            self.ollama_button.setEnabled(True)
 
     def ask_model(self):
         prompt = self.prompt.toPlainText().strip()
         if not prompt:
             return
+        if self.ai_worker is not None and self.ai_worker.isRunning():
+            return
+
         self.ask_button.setEnabled(False)
-        self.output.appendPlainText("\nYou: " + prompt)
-        QApplication.processEvents()
-        try:
-            answer = generate_reply(prompt)
-            self.output.appendPlainText("\nRivo AI: " + answer)
-        except OllamaError as exc:
-            self.output.appendPlainText(f"\nOllama error: {exc}")
-        finally:
-            self.ask_button.setEnabled(True)
+        self.output.appendPlainText("\\nYou: " + prompt)
+        self.output.appendPlainText("Rivo AI is generating a response…")
+        self.ai_worker = OllamaWorker(prompt)
+        self.ai_worker.succeeded.connect(self.on_ai_success)
+        self.ai_worker.failed.connect(self.on_ai_error)
+        self.ai_worker.finished.connect(self.on_ai_finished)
+        self.ai_worker.start()
+
+    def on_ai_success(self, answer):
+        self.output.appendPlainText("\\nRivo AI: " + answer)
+
+    def on_ai_error(self, message):
+        self.output.appendPlainText(f"\\nAI request failed: {message}")
+
+    def on_ai_finished(self):
+        self.ask_button.setEnabled(True)
+        self.ai_worker = None
 
     def closeEvent(self, event):
         self.timer.stop()
         if self.monitor is not None:
             self.monitor.stop()
+        if self.ai_worker is not None and self.ai_worker.isRunning():
+            self.ai_worker.wait(2000)
         event.accept()
 
 
