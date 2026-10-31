@@ -212,7 +212,7 @@ class MainWindow(QMainWindow):
             return
 
         self.ask_button.setEnabled(False)
-        self.output.appendPlainText("\\nYou: " + prompt)
+        self.output.appendPlainText("\nYou: " + prompt)
         self.output.appendPlainText("Rivo AI is generating a response…")
         self.ai_worker = OllamaWorker(prompt)
         self.ai_worker.succeeded.connect(self.on_ai_success)
@@ -221,10 +221,10 @@ class MainWindow(QMainWindow):
         self.ai_worker.start()
 
     def on_ai_success(self, answer):
-        self.output.appendPlainText("\\nRivo AI: " + answer)
+        self.output.appendPlainText("\nRivo AI: " + answer)
 
     def on_ai_error(self, message):
-        self.output.appendPlainText(f"\\nAI request failed: {message}")
+        self.output.appendPlainText(f"\nAI request failed: {message}")
 
     def on_ai_finished(self):
         self.ask_button.setEnabled(True)
